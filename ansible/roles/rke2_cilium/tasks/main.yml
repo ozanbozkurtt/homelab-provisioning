@@ -24,6 +24,16 @@
         group: root
         mode: "0644"
 
+    - name: Download Gateway API CRDs
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ cilium_gateway_api_version }}/{{ cilium_gateway_api_channel }}-install.yaml
+        dest: "{{ rke2_cilium_manifest_dir }}/00-gateway-api-crds.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+      when: cilium_gateway_api_enabled | bool
+
     - name: Render Cilium LB-IPAM and L2 announcement policy
       ansible.builtin.template:
         src: cilium-lb-ipam.yaml.j2

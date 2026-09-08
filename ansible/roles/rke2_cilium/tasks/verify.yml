@@ -16,6 +16,24 @@
       ansible.builtin.debug:
         var: _cilium_status.stdout_lines
 
+    - name: Confirm the Cilium GatewayClass exists
+      ansible.builtin.command: >-
+        {{ rke2_data_path }}/bin/kubectl get gatewayclass cilium
+        --ignore-not-found -o name
+      register: _cilium_gatewayclass
+      changed_when: false
+      when: cilium_gateway_api_enabled | bool
+
+    - name: Fail if Gateway API is enabled without a Cilium GatewayClass
+      ansible.builtin.assert:
+        that: _cilium_gatewayclass.stdout | trim | length > 0
+        fail_msg: >-
+          gatewayAPI.enabled true, ancak GatewayClass 'cilium' yok. Gateway API
+          CRD'leri Cilium ajanindan sonra uygulanmis olabilir:
+          kubectl -n kube-system rollout restart ds/cilium deploy/cilium-operator
+        success_msg: "GatewayClass cilium mevcut."
+      when: cilium_gateway_api_enabled | bool
+
     - name: Confirm kube-proxy is not running
       ansible.builtin.command: >-
         {{ rke2_data_path }}/bin/kubectl -n kube-system

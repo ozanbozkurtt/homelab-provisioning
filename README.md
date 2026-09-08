@@ -175,7 +175,9 @@ Bu değer hem `rke2_cni`'yi hem `disable_kube_proxy`'yi sürüyor. `canal`'a al�
 | `ipv4NativeRoutingCIDR` | `10.42.0.0/15` | cluster (`10.42/16`) + service (`10.43/16`) aralığını birlikte kapsar |
 | `l2announcements` | `true` | `CiliumLoadBalancerIPPool` ile LAN'da gerçek LoadBalancer IP'si — MetalLB gerekmez |
 | Hubble | relay açık, UI kapalı | Akışlar `hubble observe` ile; metrikler `:9965`. UI RAM'e mal oluyor |
-| clustermesh | açık, NodePort `32379` | İkinci cluster bağlanabilsin diye; `clusters: []` iken sadece apiserver ayakta |
+| `gatewayAPI` | `true` | Yönlendirme Gateway API ile; `rke2-ingress-nginx` kapatıldı |
+| `localRedirectPolicy` | `true` | node-local DNS cache'in `CiliumLocalRedirectPolicy`'si buna bağlı |
+| clustermesh | **kapalı** | Tek cluster var; `cilium_clustermesh_enabled: true` ile açılır |
 
 Doğrulama playbook'un sonunda otomatik: `cilium status --wait` ve `kube-proxy` DaemonSet'inin gerçekten yok olduğunu kontrol eden bir assert.
 
@@ -207,6 +209,34 @@ Mesh'teki tüm cluster'lar **aynı CA'yı** kullanmak zorunda, yoksa apiserver'l
   ```
   Liste boş kaldığı sürece `config.enabled: false` olur.
 - `tls.auto.method: cronJob` seçildi; `helm` sertifikaları yenilemez ve süre dolduğunda mesh sessizce kopar.
+
+### Kapatılan RKE2 bileşenleri
+
+`group_vars/rke2-cluster.yml` → `rke2_disable`:
+
+| Bileşen | Neden kapalı |
+| --- | --- |
+| `rke2-ingress-nginx` | Yönlendirme Cilium Gateway API + Envoy ile. İki controller pod'u + admission webhook + certgen job'ları gider. |
+| `rke2-snapshot-controller` + `-crd` | Volume snapshot yalnızca destekleyen bir CSI ile işe yarar; `local-path` desteklemiyor. |
+
+Kasıtlı olarak **açık** bırakılanlar: `rke2-coredns` (cluster DNS), `rke2-metrics-server` (`kubectl top`, HPA — Cilium ikamesi yok), `cloud-controller-manager` (node lifecycle buna bağlı), `rke2-runtimeclasses` (tek seferlik job, runtime maliyeti sıfır), `cilium-envoy` (Gateway API ve L7 policy için zorunlu).
+
+### node-local DNS cache
+
+Her node'da bir CoreDNS instance'ı (`node_local_dns` rolü) — pod'lar DNS için node'dan çıkmaz, cache miss olmadıkça cluster CoreDNS'e gitmez.
+
+kube-proxy kaldırıldığı için upstream `nodelocaldns`'in dayandığı iptables NOTRACK kuralları ve link-local IP kurulumu burada işlemez. Onun yerine Cilium'un `CiliumLocalRedirectPolicy`'si kullanılıyor: pod'lar CoreDNS ClusterIP'sine (`10.43.0.10`) sormaya devam eder, Cilium bu trafiği aynı node'daki cache pod'una çevirir.
+
+Döngü tehlikesi ve çözümü: cache pod'u upstream'e sorarken aynı ClusterIP'yi kullanırsa trafik kendine döner. Bu yüzden `kube-dns-upstream` adında ikinci bir Service var (sabit ClusterIP `10.43.0.11`, aynı CoreDNS pod'larını seçer) — LocalRedirectPolicy onu yakalamıyor. Ek güvence: `skipRedirectFromBackend: true`.
+
+```bash
+kubectl -n kube-system get ds node-local-dns
+kubectl -n kube-system get ciliumlocalredirectpolicy node-local-dns
+# cache çalışıyor mu: aynı sorguyu iki kez sor, ikincisi node'dan çıkmamalı
+kubectl run -it --rm dnstest --image=busybox:1.36 --restart=Never -- nslookup kubernetes.default
+```
+
+Cache node'da yoksa (pod down) Cilium trafiği normal servise gönderir — DNS kesilmez.
 
 ---
 
@@ -251,7 +281,8 @@ Mesh'teki tüm cluster'lar **aynı CA'yı** kullanmak zorunda, yoksa apiserver'l
     ├── collections/requirements.yml  # community.general, community.crypto
     ├── roles/
     │   ├── requirements.yml          # lablabs.rke2
-    │   └── rke2_cilium/              # Cilium HelmChartConfig + LB-IPAM + cilium-cli + verify
+    │   ├── rke2_cilium/              # Cilium HelmChartConfig + LB-IPAM + Gateway API CRD + verify
+    │   └── node_local_dns/           # node-local DNS cache + CiliumLocalRedirectPolicy
     ├── inventory/ozan-local/
     │   ├── hosts.yml                 # Terraform üretir, gitignored
     │   └── group_vars/

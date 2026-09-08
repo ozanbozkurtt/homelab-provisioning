@@ -1,0 +1,23 @@
+---
+- name: Deploy node-local DNS cache
+  when:
+    - inventory_hostname == groups[rke2_servers_group_name][0]
+    - node_local_dns_enabled | bool
+    - "'cilium' in rke2_cni"
+  tags: [dns, node_local_dns]
+  block:
+    - name: Ensure RKE2 manifests directory exists
+      ansible.builtin.file:
+        path: "{{ node_local_dns_manifest_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render node-local DNS manifests
+      ansible.builtin.template:
+        src: node-local-dns.yaml.j2
+        dest: "{{ node_local_dns_manifest_dir }}/node-local-dns.yaml"
+        owner: root
+        group: root
+        mode: "0644"

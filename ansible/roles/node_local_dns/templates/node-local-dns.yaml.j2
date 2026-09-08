@@ -1,0 +1,182 @@
+---
+# CoreDNS'e giden ikinci Service. CiliumLocalRedirectPolicy yalnizca
+# {{ node_local_dns_cluster_dns_service }} servisini yakalar; bu servis
+# yakalanmadigi icin node-local cache upstream'e buradan ulasir.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ node_local_dns_upstream_service_name }}
+  namespace: {{ node_local_dns_namespace }}
+  labels:
+    k8s-app: kube-dns-upstream
+spec:
+  type: ClusterIP
+  clusterIP: {{ node_local_dns_upstream_service_ip }}
+  selector:
+    k8s-app: kube-dns
+  ports:
+    - name: dns
+      port: 53
+      protocol: UDP
+      targetPort: 53
+    - name: dns-tcp
+      port: 53
+      protocol: TCP
+      targetPort: 53
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-local-dns
+  namespace: {{ node_local_dns_namespace }}
+data:
+  Corefile: |
+    {{ node_local_dns_cluster_domain }}:53 {
+        errors
+        cache {
+            success 9984 {{ node_local_dns_cache_ttl_success }}
+            denial 9984 {{ node_local_dns_cache_ttl_denial }}
+        }
+        reload
+        loop
+        forward . {{ node_local_dns_upstream_service_ip }} {
+            force_tcp
+        }
+        prometheus :{{ node_local_dns_metrics_port }}
+        health :{{ node_local_dns_health_port }}
+        ready :{{ node_local_dns_ready_port }}
+    }
+    in-addr.arpa:53 {
+        errors
+        cache {{ node_local_dns_cache_ttl_success }}
+        reload
+        loop
+        forward . {{ node_local_dns_upstream_service_ip }} {
+            force_tcp
+        }
+        prometheus :{{ node_local_dns_metrics_port }}
+    }
+    ip6.arpa:53 {
+        errors
+        cache {{ node_local_dns_cache_ttl_success }}
+        reload
+        loop
+        forward . {{ node_local_dns_upstream_service_ip }} {
+            force_tcp
+        }
+        prometheus :{{ node_local_dns_metrics_port }}
+    }
+    .:53 {
+        errors
+        cache {{ node_local_dns_cache_ttl_success }}
+        reload
+        loop
+        forward . /etc/resolv.conf
+        prometheus :{{ node_local_dns_metrics_port }}
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-local-dns
+  namespace: {{ node_local_dns_namespace }}
+  labels:
+    k8s-app: node-local-dns
+spec:
+  selector:
+    matchLabels:
+      k8s-app: node-local-dns
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: node-local-dns
+    spec:
+      priorityClassName: system-node-critical
+      # Kendi upstream'i icin cluster DNS'e ihtiyaci yok: node'un resolv.conf'u.
+      dnsPolicy: Default
+      # Control plane CriticalAddonsOnly=true:NoExecute ile taint'li; cache her
+      # node'da bulunmali, yoksa o node'un pod'lari icin DNS yolu degisir.
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: node-cache
+          image: {{ node_local_dns_image }}
+          args: ["-conf", "/etc/coredns/Corefile"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["NET_BIND_SERVICE"]
+              drop: ["ALL"]
+              # 53 ayricalikli port: NET_BIND_SERVICE olmadan baglanamaz.
+          ports:
+            - name: dns
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ node_local_dns_metrics_port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ node_local_dns_health_port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ node_local_dns_ready_port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: {{ node_local_dns_cpu_request }}
+              memory: {{ node_local_dns_memory_request }}
+            limits:
+              cpu: {{ node_local_dns_cpu_limit }}
+              memory: {{ node_local_dns_memory_limit }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coredns
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: node-local-dns
+            items:
+              - key: Corefile
+                path: Corefile
+---
+# Pod'lar {{ node_local_dns_cluster_dns_service }} ClusterIP'sine sormaya devam
+# eder; Cilium bu trafigi ayni node'daki cache pod'una cevirir. Local backend
+# yoksa trafik normal servise gider.
+apiVersion: cilium.io/v2
+kind: CiliumLocalRedirectPolicy
+metadata:
+  name: node-local-dns
+  namespace: {{ node_local_dns_namespace }}
+spec:
+  redirectFrontend:
+    serviceMatcher:
+      serviceName: {{ node_local_dns_cluster_dns_service }}
+      namespace: {{ node_local_dns_namespace }}
+  redirectBackend:
+    localEndpointSelector:
+      matchLabels:
+        k8s-app: node-local-dns
+    toPorts:
+      # Port adlari frontend Service'teki adlarla ayni olmali.
+      - port: "53"
+        name: udp-53
+        protocol: UDP
+      - port: "53"
+        name: tcp-53
+        protocol: TCP
+  # Cache pod'unun kendi upstream sorgusu tekrar kendisine donmesin.
+  skipRedirectFromBackend: true

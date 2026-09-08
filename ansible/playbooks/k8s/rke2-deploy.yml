@@ -18,12 +18,12 @@
       tags: [rke2, kernel]
 
   roles:
-    # Sıra kritik: HelmChartConfig, rke2-server ilk kez başlamadan manifests
-    # dizininde olmalı; yoksa Cilium varsayılanlarla kurulur.
     - role: rke2_cilium
       tags: [rke2, cilium]
     - role: lablabs.rke2
       tags: rke2
+    - role: node_local_dns
+      tags: [dns, node_local_dns]
 
   post_tasks:
     - name: Link kubectl into PATH on servers

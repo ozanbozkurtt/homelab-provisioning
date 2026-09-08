@@ -1,0 +1,23 @@
+---
+node_local_dns_enabled: true
+node_local_dns_manifest_dir: /var/lib/rancher/rke2/server/manifests
+node_local_dns_namespace: kube-system
+
+node_local_dns_image: rancher/hardened-coredns:v1.12.0-build20241126
+
+node_local_dns_cluster_dns_service: rke2-coredns-rke2-coredns
+
+node_local_dns_upstream_service_name: kube-dns-upstream
+node_local_dns_upstream_service_ip: 10.43.0.11
+
+node_local_dns_cluster_domain: cluster.local
+node_local_dns_cache_ttl_success: 30
+node_local_dns_cache_ttl_denial: 5
+node_local_dns_metrics_port: 9253
+node_local_dns_health_port: 8080
+node_local_dns_ready_port: 8181
+
+node_local_dns_cpu_request: 25m
+node_local_dns_memory_request: 32Mi
+node_local_dns_cpu_limit: 200m
+node_local_dns_memory_limit: 128Mi

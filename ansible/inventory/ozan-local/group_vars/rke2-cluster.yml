@@ -22,6 +22,11 @@ rke2_agent_node_taints: []
 rke2_cni: ["{{ cluster_cni }}"]
 disable_kube_proxy: "{{ cluster_cni == 'cilium' }}"
 
+rke2_disable:
+  - rke2-ingress-nginx
+  - rke2-snapshot-controller
+  - rke2-snapshot-controller-crd
+
 rke2_cluster_cidr: ["10.42.0.0/16"]
 rke2_service_cidr: ["10.43.0.0/16"]
 
@@ -35,10 +40,15 @@ cilium_hubble_enabled: true
 cilium_hubble_relay: true
 cilium_hubble_ui: false
 
-cilium_clustermesh_enabled: true
+# Tek cluster var ve cilium_clustermesh_clusters bos: clustermesh-apiserver
+# (etcd + apiserver + kvstoremesh) bosa calisir. Ikinci cluster gelince ac.
+cilium_clustermesh_enabled: false
 cilium_clustermesh_replicas: 1
 cilium_clustermesh_nodeport: 32379
 cilium_clustermesh_clusters: []
+
+cilium_gateway_api_enabled: true
+cilium_local_redirect_policy: true
 
 cilium_lb_ipam_enabled: true
 cilium_lb_ipam_range: "192.168.1.240-192.168.1.250"

@@ -26,6 +26,12 @@ cilium_clustermesh_clusters: []
 cilium_ca_dir: "{{ inventory_dir | dirname | dirname }}/cilium-ca/{{ env_name }}"
 cilium_ca_validity_days: 3650
 
+cilium_gateway_api_enabled: true
+cilium_gateway_api_version: v1.2.1
+cilium_gateway_api_channel: standard
+
+cilium_local_redirect_policy: true
+
 cilium_cli_install: true
 cilium_cli_version: "v0.19.2"
 cilium_cli_base_url: "https://github.com/cilium/cilium-cli/releases/download"

@@ -5,7 +5,8 @@
   gather_facts: true
 
   vars:
-    required_kernel_modules: [ip_vs, ip_vs_rr, ip_vs_wrr, ip_vs_sh, nf_conntrack]
+    required_kernel_modules:
+      [ip_vs, ip_vs_rr, ip_vs_wrr, ip_vs_sh, nf_conntrack]
 
   pre_tasks:
     - name: Enable kernel modules
@@ -56,3 +57,33 @@
         name: rke2_cilium
         tasks_from: verify
       tags: [cilium, verify]
+
+    - name: Look for kubectl on the Ansible controller
+      ansible.builtin.command: kubectl version --client
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      register: _controller_kubectl
+      when: inventory_hostname == groups[rke2_servers_group_name][0]
+      tags: [rke2, kubeconfig]
+
+    - name: Verify the downloaded kubeconfig reaches the API server
+      ansible.builtin.command: >-
+        kubectl --kubeconfig {{ rke2_download_kubeconf_path }}/{{ rke2_download_kubeconf_file_name }}
+        get nodes -o name
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      register: _kubeconfig_nodes
+      when:
+        - inventory_hostname == groups[rke2_servers_group_name][0]
+        - rke2_download_kubeconf | bool
+        - _controller_kubectl.rc == 0
+      tags: [rke2, kubeconfig]
+
+    - name: Show nodes seen through the downloaded kubeconfig
+      ansible.builtin.debug:
+        var: _kubeconfig_nodes.stdout_lines
+      when: _kubeconfig_nodes.stdout_lines is defined
+      tags: [rke2, kubeconfig]

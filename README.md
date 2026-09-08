@@ -61,7 +61,22 @@ Adımların gerekçesi ve seçenekleri [Kullanım](#kullanım) bölümünde.
 
 **Toplam:** 6 vCPU · 12288 MB RAM (2048 MB PVE'ye ayrıldı, 13808 MB bütçe) · 160 GB thin disk.
 
-Worker'lar master'la aynı RAM'i alıyor çünkü Prometheus/Grafana/ArgoCD cluster içinde ve **worker'larda** koşuyor: control plane `CriticalAddonsOnly=true:NoExecute` ile iş yüklerine kapalı. Disk de aynı sebeple 60 GB — Prometheus TSDB'si worker diskinde duruyor.
+Worker'lar master'la aynı RAM'i alıyor çünkü iş yüklerinin tamamı **worker'larda** koşuyor: control plane `CriticalAddonsOnly=true:NoExecute` ile iş yüklerine kapalı. Disk de aynı sebeple 60 GB — kalıcı volume'lar `local-path` ile worker diskinde duruyor.
+
+**Diski Terraform büyütür.** Boyutu `master_disk_gb` / `worker_disk_gb` belirler, kullanılabilir hale getirmeyi de Terraform'un ürettiği cloud-init yapar. Şablon VM'de `/` LVM üzerinde ve root LV diskin tamamını kullanmaz (`sda3` 18 GB, root LV 10 GB); bu haliyle 40/60 GB disk verilse bile `/` 10 GB kalır, kubelet `node.kubernetes.io/disk-pressure` taint'i basar ve paketli chart'ların helm job'ları schedule edilemez. cloud-init dört adımda diski sonuna kadar açar:
+
+| Adım | Ne yapar |
+| --- | --- |
+| `growpart` modülü | `root_partition`'ı (`/dev/sda3`) diskin sonuna kadar büyütür |
+| `pvresize` | LVM physical volume'ü yeni partition boyutuna genişletir |
+| `lvextend -l +100%FREE` | root LV'yi volume group'taki tüm boş alanı alacak şekilde büyütür |
+| `resize2fs` | ext4 dosya sistemini LV'ye yayar, mount'lu haldeyken |
+
+Düzen `root_partition` / `root_vg` / `root_lv` değişkenleriyle değişir. `runcmd` yalnızca ilk boot'ta çalıştığı için zaten açık bir VM'e uygulamak VM'i yeniden yaratmayı gerektirir:
+
+```bash
+terraform apply -replace='module.rke2_master.proxmox_virtual_environment_vm.vm'
+```
 
 `terraform_data.resource_budget` precondition'ı, talep edilen RAM node bütçesini aşarsa `plan` aşamasında hata verir. Boyutları değiştirirken `node_total_memory_mb` / `node_reserved_memory_mb` değerlerini de gözden geçirin.
 
@@ -122,7 +137,7 @@ kubeconfig'i `lablabs.rke2` rolü `rke2_download_kubeconf: true` ile otomatik in
 
 ### 4. Faz 2 — GitOps
 
-Cluster ayağa kalktıktan sonra ArgoCD, monitoring ve uygulamalar cluster içine GitOps ile kurulur; o katman ayrı bir repoda yaşar.
+Cluster ayağa kalktıktan sonra cluster içine kurulacak her şey GitOps ile gelir; o katman ayrı bir repoda yaşar.
 
 ### Temizlik / yeniden kurulum
 
@@ -179,6 +194,8 @@ Bu değer hem `rke2_cni`'yi hem `disable_kube_proxy`'yi sürüyor. `canal`'a al�
 | `localRedirectPolicy` | `true` | node-local DNS cache'in `CiliumLocalRedirectPolicy`'si buna bağlı |
 | clustermesh | **kapalı** | Tek cluster var; `cilium_clustermesh_enabled: true` ile açılır |
 
+`operator.tolerations` yazmak chart'ın varsayılanını (`- operator: Exists`) geçersiz kılar. Sadece `CriticalAddonsOnly` tolere edilirse `node.kubernetes.io/not-ready` dışarıda kalır ve kurulum tamamlanamaz: node NotReady olduğu için operator schedule edilemez, CRD'ler oluşmaz, agent `Waiting for CRDs` ile bekler, node NotReady kalır. Template'te bu yüzden `- operator: Exists` duruyor.
+
 Doğrulama playbook'un sonunda otomatik: `cilium status --wait` ve `kube-proxy` DaemonSet'inin gerçekten yok olduğunu kontrol eden bir assert.
 
 ```bash
@@ -188,7 +205,7 @@ kubectl -n kube-system get pods -l k8s-app=cilium
 
 > **Dikkat:** `cilium_lb_ipam_range` varsayılanı `192.168.1.240-192.168.1.250`. Router'ının DHCP havuzuyla çakışmadığını doğrula, yoksa IP çakışması yaşarsın.
 
-> **RAM:** Cilium agent + envoy + Hubble relay + clustermesh-apiserver, canal'a göre kayda değer ek yük getirir. Cluster içi monitoring ile birlikte 4 GB'lık worker'larda sıkışırsa önce `cilium_clustermesh_replicas: 0`.
+> **RAM:** Cilium agent + envoy + Hubble relay + clustermesh-apiserver, canal'a göre kayda değer ek yük getirir. 4 GB'lık worker'larda iş yükleriyle birlikte sıkışırsa önce `cilium_clustermesh_replicas: 0`.
 
 ### Clustermesh ve paylaşılan CA
 

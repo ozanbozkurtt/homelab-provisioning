@@ -27,5 +27,13 @@ packages:
   - qemu-guest-agent
   - python3
 
+growpart:
+  mode: auto
+  devices: ["${root_partition}"]
+  ignore_growroot_disabled: false
+
 runcmd:
+  - [pvresize, "${root_partition}"]
+  - [lvextend, -l, +100%FREE, "/dev/${root_vg}/${root_lv}"]
+  - [resize2fs, "/dev/${root_vg}/${root_lv}"]
   - systemctl enable --now qemu-guest-agent

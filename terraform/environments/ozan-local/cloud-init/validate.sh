@@ -21,8 +21,8 @@ render() {
   [[ -s "$tmp/$1.yaml" ]] || { echo "render '$1' boş döndü — terraform console hatası:" >&2; terraform console <<<"$2" >&2; exit 1; }
 }
 
-render cloud-init 'templatefile("cloud-init/base.yaml.tftpl", {hostname="rke2-master", username="ubuntu", password_hash="$6$salt$hash", ssh_public_keys=jsonencode(["ssh-ed25519 AAAA t"])})'
-render cloud-init-nopw 'templatefile("cloud-init/base.yaml.tftpl", {hostname="rke2-master", username="ubuntu", password_hash=null, ssh_public_keys=jsonencode(["ssh-ed25519 AAAA t"])})'
+render cloud-init 'templatefile("cloud-init/base.yaml.tftpl", {hostname="rke2-master", username="ubuntu", password_hash="$6$salt$hash", ssh_public_keys=jsonencode(["ssh-ed25519 AAAA t"]), root_partition="/dev/sda3", root_vg="ubuntu-vg", root_lv="ubuntu-lv"})'
+render cloud-init-nopw 'templatefile("cloud-init/base.yaml.tftpl", {hostname="rke2-master", username="ubuntu", password_hash=null, ssh_public_keys=jsonencode(["ssh-ed25519 AAAA t"]), root_partition="/dev/sda3", root_vg="ubuntu-vg", root_lv="ubuntu-lv"})'
 
 render inventory 'templatefile("templates/ansible-inventory.yml.tftpl", {username="ubuntu", master_name="rke2-master", master_ip="192.168.1.210", workers={"rke2-worker-1"="192.168.1.211","rke2-worker-2"="192.168.1.212"}})'
 
@@ -39,7 +39,11 @@ assert "qemu-guest-agent" in top["packages"], "cloud-init: qemu-guest-agent eksi
 assert top["ssh_pwauth"] is False, "cloud-init: SSH parola girişi açık kalmış"
 assert top["chpasswd"]["users"][0]["type"] == "hash", "cloud-init: parola düz metin yazılıyor"
 assert top["users"][0]["lock_passwd"] is False, "cloud-init: hash verildiği halde hesap kilitli"
-print(f"cloud-init: OK ({len(top.get('packages', []))} paket, {len(top.get('runcmd', []))} runcmd)")
+assert top["growpart"]["devices"] == ["/dev/sda3"], "cloud-init: growpart partition'i yanlis"
+cmds = [" ".join(c) if isinstance(c, list) else c for c in top["runcmd"]]
+for expected in ("pvresize /dev/sda3", "lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv", "resize2fs /dev/ubuntu-vg/ubuntu-lv"):
+    assert any(expected == c for c in cmds), f"cloud-init: runcmd'de eksik: {expected}"
+print(f"cloud-init: OK ({len(top.get('packages', []))} paket, {len(top.get('runcmd', []))} runcmd, disk buyutme var)")
 
 nopw = yaml.safe_load((tmp / "cloud-init-nopw.yaml").read_text())
 assert "chpasswd" not in nopw, "cloud-init: hash yokken chpasswd bloğu üretiliyor"

@@ -81,6 +81,24 @@ variable "dns_servers" {
   }
 }
 
+variable "root_partition" {
+  description = "Root LVM PV'sinin partition'i. growpart ve pvresize bunu büyütür."
+  type        = string
+  default     = "/dev/sda3"
+}
+
+variable "root_vg" {
+  description = "Root logical volume'un volume group'u"
+  type        = string
+  default     = "ubuntu-vg"
+}
+
+variable "root_lv" {
+  description = "Root logical volume adı"
+  type        = string
+  default     = "ubuntu-lv"
+}
+
 variable "vm_username" {
   description = "VM'lerde oluşturulacak sudo yetkili kullanıcı"
   type        = string

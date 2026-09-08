@@ -69,6 +69,9 @@ resource "proxmox_virtual_environment_file" "cloud_init" {
       username        = var.vm_username
       password_hash   = var.vm_password_hash
       ssh_public_keys = jsonencode(var.ssh_public_keys)
+      root_partition  = var.root_partition
+      root_vg         = var.root_vg
+      root_lv         = var.root_lv
     })
   }
 }

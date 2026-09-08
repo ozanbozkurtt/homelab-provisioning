@@ -1,0 +1,32 @@
+---
+rke2_cilium_manifest_dir: /var/lib/rancher/rke2/server/manifests
+
+cilium_cluster_name: "{{ env_name | default('cluster') }}"
+cilium_cluster_id: 1
+
+cilium_native_routing_cidr: "10.42.0.0/15"
+
+cilium_hubble_enabled: true
+cilium_hubble_relay: true
+cilium_hubble_ui: false
+cilium_hubble_metrics_port: 9965
+cilium_agent_metrics_port: 9962
+cilium_operator_metrics_port: 9963
+
+cilium_lb_ipam_enabled: true
+cilium_lb_ipam_range: "192.168.1.240-192.168.1.250"
+
+cilium_clustermesh_enabled: true
+cilium_clustermesh_replicas: 1
+cilium_clustermesh_nodeport: 32379
+cilium_clustermesh_max_connected_clusters: 255
+cilium_clustermesh_tls_method: cronJob
+cilium_clustermesh_clusters: []
+
+cilium_ca_dir: "{{ inventory_dir | dirname | dirname }}/cilium-ca/{{ env_name }}"
+cilium_ca_validity_days: 3650
+
+cilium_cli_install: true
+cilium_cli_version: "v0.19.2"
+cilium_cli_base_url: "https://github.com/cilium/cilium-cli/releases/download"
+cilium_cli_install_path: /usr/local/bin

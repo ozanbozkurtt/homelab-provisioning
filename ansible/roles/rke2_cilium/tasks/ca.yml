@@ -1,0 +1,51 @@
+---
+- name: Ensure a shared Cilium CA exists on the Ansible controller
+  delegate_to: localhost
+  become: false
+  vars:
+    # cryptography kütüphanesi ansible'ın kendi yorumlayıcısında; localhost için
+    # keşfedilen sistem python'unda genelde yok.
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  tags: [cilium, cilium_ca]
+  block:
+    - name: Create Cilium CA directory
+      ansible.builtin.file:
+        path: "{{ cilium_ca_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate Cilium CA private key
+      community.crypto.openssl_privatekey:
+        path: "{{ cilium_ca_dir }}/ca.key"
+        size: 4096
+        mode: "0600"
+        state: present
+
+    - name: Generate Cilium CA signing request
+      community.crypto.openssl_csr:
+        path: "{{ cilium_ca_dir }}/ca.csr"
+        privatekey_path: "{{ cilium_ca_dir }}/ca.key"
+        common_name: "Cilium CA"
+        basic_constraints: ["CA:TRUE"]
+        basic_constraints_critical: true
+        key_usage: [keyCertSign, cRLSign]
+        key_usage_critical: true
+        mode: "0644"
+        state: present
+
+    - name: Generate Cilium CA self-signed certificate
+      community.crypto.x509_certificate:
+        path: "{{ cilium_ca_dir }}/ca.crt"
+        privatekey_path: "{{ cilium_ca_dir }}/ca.key"
+        csr_path: "{{ cilium_ca_dir }}/ca.csr"
+        provider: selfsigned
+        selfsigned_not_after: "+{{ cilium_ca_validity_days }}d"
+        mode: "0644"
+        state: present
+
+- name: Load Cilium CA into facts
+  ansible.builtin.set_fact:
+    cilium_tls_ca_key: "{{ lookup('file', cilium_ca_dir ~ '/ca.key') | b64encode }}"
+    cilium_tls_ca_cert: "{{ lookup('file', cilium_ca_dir ~ '/ca.crt') | b64encode }}"
+  no_log: true
+  tags: [cilium, cilium_ca]

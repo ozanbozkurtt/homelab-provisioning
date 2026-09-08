@@ -1,0 +1,123 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-cilium
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    cluster:
+      name: "{{ cilium_cluster_name }}"
+      id: {{ cilium_cluster_id }}
+
+    tls:
+      secretSync:
+        enabled: true
+      ca:
+        key: {{ cilium_tls_ca_key }}
+        cert: {{ cilium_tls_ca_cert }}
+        certValidityDuration: {{ cilium_ca_validity_days }}
+
+    k8sServiceHost: {{ rke2_api_ip }}
+    k8sServicePort: {{ rke2_apiserver_dest_port }}
+    kubeProxyReplacement: true
+    waitForKubeProxy: false
+
+    ipam:
+      mode: "cluster-pool"
+      operator:
+        clusterPoolIPv4PodCIDRList: {{ rke2_cluster_cidr | first }}
+        clusterPoolIPv4MaskSize: 24
+
+    routingMode: native
+    autoDirectNodeRoutes: true
+    ipv4NativeRoutingCIDR: "{{ cilium_native_routing_cidr }}"
+
+    masquerade: true
+    bpf:
+      masquerade: true
+      hostLegacyRouting: false
+
+    l2announcements:
+      enabled: {{ cilium_lb_ipam_enabled | bool | lower }}
+
+    l7Proxy: true
+    envoy:
+      enabled: true
+
+    ingressController:
+      enabled: false
+
+    prometheus:
+      enabled: true
+      port: {{ cilium_agent_metrics_port }}
+
+    hubble:
+      enabled: {{ cilium_hubble_enabled | bool | lower }}
+
+      metrics:
+        enabled:
+          - dns:query;ignoreAAAA
+          - drop
+          - tcp
+          - flow
+          - icmp
+          - http
+        port: {{ cilium_hubble_metrics_port }}
+
+      tls:
+        enabled: {{ cilium_hubble_enabled | bool | lower }}
+        auto:
+          enabled: true
+          method: cronJob
+          certValidityDuration: 1095
+
+      relay:
+        enabled: {{ cilium_hubble_relay | bool | lower }}
+        replicas: 1
+
+      ui:
+        enabled: {{ cilium_hubble_ui | bool | lower }}
+        replicas: 1
+        ingress:
+          enabled: false
+
+    clustermesh:
+      useAPIServer: {{ cilium_clustermesh_enabled | bool | lower }}
+      maxConnectedClusters: {{ cilium_clustermesh_max_connected_clusters }}
+
+      apiserver:
+        replicas: {{ cilium_clustermesh_replicas }}
+
+        service:
+          type: NodePort
+          nodePort: {{ cilium_clustermesh_nodeport }}
+
+        tls:
+          authMode: cluster
+          auto:
+            enabled: true
+            method: {{ cilium_clustermesh_tls_method }}
+            certValidityDuration: 1095
+
+        kvstoremesh:
+          enabled: true
+
+      config:
+        enabled: {{ (cilium_clustermesh_clusters | length > 0) | bool | lower }}
+        domain: mesh.cilium.io
+        clusters: {{ cilium_clustermesh_clusters | to_json }}
+
+      enableEndpointSliceSynchronization: false
+
+    operator:
+      replicas: 1
+      rollOutPods: true
+      prometheus:
+        enabled: true
+        port: {{ cilium_operator_metrics_port }}
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+          effect: NoExecute
+
+    rollOutCiliumPods: true

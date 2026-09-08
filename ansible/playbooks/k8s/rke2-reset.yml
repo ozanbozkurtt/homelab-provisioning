@@ -1,0 +1,52 @@
+---
+
+- name: Confirm the reset is intentional
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  become: false
+  tasks:
+    - name: Require an explicit confirmation flag
+      ansible.builtin.assert:
+        that: reset_confirmation | default('') == 'yes'
+        fail_msg: |
+          Bu playbook cluster'ı tamamen siler (etcd dahil, geri dönüşü yok).
+          Bilerek yapıyorsan:
+            ansible-playbook playbooks/k8s/rke2-reset.yml -e reset_confirmation=yes
+
+- name: Uninstall RKE2
+  hosts: rke2-cluster
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Locate the RKE2 uninstall script
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: _rke2_uninstall
+      loop:
+        - /usr/local/bin/rke2-uninstall.sh
+        - /usr/bin/rke2-uninstall.sh
+
+    - name: Run the RKE2 uninstall script
+      ansible.builtin.command: "{{ _found.stat.path }}"
+      vars:
+        _found: "{{ _rke2_uninstall.results | selectattr('stat.exists') | first | default(None) }}"
+      when: _found is not none
+      register: _rke2_uninstalled
+      changed_when: _rke2_uninstalled.rc == 0
+
+    - name: Remove artefacts this repo added
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/profile.d/rke2.sh
+        - /usr/local/bin/kubectl
+        - /usr/local/bin/cilium
+        - /root/.kube
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} temizlendi. Yeniden kurulum için:
+          ansible-playbook playbooks/site.yml

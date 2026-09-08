@@ -1,0 +1,32 @@
+proxmox_api_url  = "https://192.168.1.99:8006/"
+proxmox_insecure = true
+target_node      = "ozan"
+template_vm_id   = 100
+
+# API token'ı BU DOSYAYA YAZMA. Dosya gitignored ama diskte düz metin durur ve
+# state'e de düz metin girer. Bunun yerine ortam değişkeni kullan:
+#
+#   export TF_VAR_proxmox_api_token='USER@REALM!TOKENID=UUID'
+#
+# Yine de dosyaya yazacaksan: chmod 600 terraform.tfvars
+
+# API token'ı bu dosyaya yazma, diskte ve state'te düz metin durur:
+#   export TF_VAR_proxmox_api_token='USER@REALM!TOKENID=UUID'
+
+vm_username = "ubuntu"
+
+# Zorunlu — Ansible playbook'ları key tabanlı SSH ile bağlanır.
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... ozan@mac",
+]
+
+# PVE konsolundan parolayla girmek istemiyorsan hiç verme (hesap kilitli kalır,
+# SSH key ile giriş çalışmaya devam eder). Vereceksen DÜZ METİN DEĞİL hash:
+#   mkpasswd -m sha-512
+# vm_password_hash = "$6$rounds=..."
+
+network_cidr    = "192.168.1.0/24"
+network_gateway = "192.168.1.1"
+dns_servers     = ["192.168.1.1", "1.1.1.1"]
+
+worker_count = 2

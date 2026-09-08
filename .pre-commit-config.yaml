@@ -1,0 +1,28 @@
+---
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.2
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+        args: [--tf-init-args=-upgrade]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+      - id: check-added-large-files
+      - id: check-yaml
+        # Terraform template'leri (%{ }) ve Jinja (.j2) geçerli YAML değil.
+        exclude: '\.(tftpl|j2)$|^ansible/\.galaxy/'
+
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v26.8.0
+    hooks:
+      - id: ansible-lint
+        files: ^ansible/(playbooks|roles|inventory)/
+        exclude: ^ansible/\.galaxy/
+        # ansible.cfg (roles_path) ansible/ altında, pre-commit repo kökünden koşar.
+        args: [--project-dir, ansible]

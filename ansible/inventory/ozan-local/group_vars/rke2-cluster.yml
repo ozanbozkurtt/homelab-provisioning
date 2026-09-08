@@ -1,0 +1,48 @@
+---
+rke2_type: "{{ 'server' if inventory_hostname in groups[rke2_servers_group_name] else 'agent' }}"
+
+rke2_cluster_group_name: rke2-cluster
+rke2_servers_group_name: masters
+rke2_agents_group_name: workers
+
+rke2_ha_mode: false
+rke2_api_ip: "{{ hostvars[groups[rke2_servers_group_name][0]].ansible_host }}"
+rke2_apiserver_dest_port: 6443
+
+rke2_version: v1.31.7+rke2r1
+rke2_channel: stable
+
+rke2_additional_sans:
+  - "{{ rke2_api_ip }}"
+
+rke2_server_node_taints:
+  - "CriticalAddonsOnly=true:NoExecute"
+rke2_agent_node_taints: []
+
+rke2_cni: ["{{ cluster_cni }}"]
+disable_kube_proxy: "{{ cluster_cni == 'cilium' }}"
+
+rke2_cluster_cidr: ["10.42.0.0/16"]
+rke2_service_cidr: ["10.43.0.0/16"]
+
+rke2_node_name: "{{ inventory_hostname }}"
+
+cilium_cluster_name: "{{ env_name }}"
+cilium_cluster_id: 1
+cilium_native_routing_cidr: "10.42.0.0/15"
+
+cilium_hubble_enabled: true
+cilium_hubble_relay: true
+cilium_hubble_ui: false
+
+cilium_clustermesh_enabled: true
+cilium_clustermesh_replicas: 1
+cilium_clustermesh_nodeport: 32379
+cilium_clustermesh_clusters: []
+
+cilium_lb_ipam_enabled: true
+cilium_lb_ipam_range: "192.168.1.240-192.168.1.250"
+
+rke2_download_kubeconf: true
+rke2_download_kubeconf_path: "{{ lookup('env', 'HOME') }}/.kube"
+rke2_download_kubeconf_file_name: "rke2-{{ env_name }}.yaml"

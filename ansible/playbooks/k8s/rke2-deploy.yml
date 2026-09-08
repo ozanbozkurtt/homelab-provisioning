@@ -1,0 +1,58 @@
+---
+- name: Deploy RKE2 cluster with Cilium
+  hosts: rke2-cluster
+  become: true
+  gather_facts: true
+
+  vars:
+    required_kernel_modules: [ip_vs, ip_vs_rr, ip_vs_wrr, ip_vs_sh, nf_conntrack]
+
+  pre_tasks:
+    - name: Enable kernel modules
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+        persistent: present
+      loop: "{{ required_kernel_modules }}"
+      tags: [rke2, kernel]
+
+  roles:
+    # Sıra kritik: HelmChartConfig, rke2-server ilk kez başlamadan manifests
+    # dizininde olmalı; yoksa Cilium varsayılanlarla kurulur.
+    - role: rke2_cilium
+      tags: [rke2, cilium]
+    - role: lablabs.rke2
+      tags: rke2
+
+  post_tasks:
+    - name: Link kubectl into PATH on servers
+      ansible.builtin.file:
+        src: "{{ rke2_data_path }}/bin/kubectl"
+        dest: /usr/local/bin/kubectl
+        state: link
+      when: inventory_hostname in groups[rke2_servers_group_name]
+      tags: [rke2, kubectl]
+
+    - name: Export KUBECONFIG for interactive shells on servers
+      ansible.builtin.copy:
+        dest: /etc/profile.d/rke2.sh
+        content: |
+          export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+          export PATH=$PATH:{{ rke2_data_path }}/bin
+        owner: root
+        group: root
+        mode: "0644"
+      when: inventory_hostname in groups[rke2_servers_group_name]
+      tags: [rke2, kubectl]
+
+    - name: Install Cilium CLI
+      ansible.builtin.include_role:
+        name: rke2_cilium
+        tasks_from: cilium_cli
+      tags: [cilium, cilium_cli]
+
+    - name: Verify Cilium
+      ansible.builtin.include_role:
+        name: rke2_cilium
+        tasks_from: verify
+      tags: [cilium, verify]

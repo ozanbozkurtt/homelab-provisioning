@@ -1,0 +1,33 @@
+---
+- name: Verify Cilium is healthy
+  when:
+    - inventory_hostname == groups[rke2_servers_group_name][0]
+    - "'cilium' in rke2_cni"
+  tags: [cilium, verify]
+  environment:
+    KUBECONFIG: /etc/rancher/rke2/rke2.yaml
+  block:
+    - name: Wait for Cilium to converge
+      ansible.builtin.command: "{{ cilium_cli_install_path }}/cilium status --wait --wait-duration 5m"
+      register: _cilium_status
+      changed_when: false
+
+    - name: Show Cilium status
+      ansible.builtin.debug:
+        var: _cilium_status.stdout_lines
+
+    - name: Confirm kube-proxy is not running
+      ansible.builtin.command: >-
+        {{ rke2_data_path }}/bin/kubectl -n kube-system
+        get daemonset kube-proxy --ignore-not-found -o name
+      register: _kube_proxy
+      changed_when: false
+
+    - name: Fail if kube-proxy still exists while kubeProxyReplacement is on
+      ansible.builtin.assert:
+        that: _kube_proxy.stdout | trim | length == 0
+        fail_msg: >-
+          kube-proxy DaemonSet hâlâ mevcut, ancak Cilium kubeProxyReplacement
+          ile kuruldu. disable_kube_proxy=true ayarını ve node'ların yeniden
+          kurulup kurulmadığını kontrol edin.
+        success_msg: "kube-proxy yok — Cilium kubeProxyReplacement aktif."

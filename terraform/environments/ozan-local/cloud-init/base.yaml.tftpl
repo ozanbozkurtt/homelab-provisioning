@@ -1,0 +1,31 @@
+#cloud-config
+hostname: ${hostname}
+fqdn: ${hostname}
+preserve_hostname: false
+manage_etc_hosts: true
+
+users:
+  - name: ${username}
+    groups: [sudo, adm]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: ${password_hash == null}
+    ssh_authorized_keys: ${ssh_public_keys}
+
+ssh_pwauth: false
+%{ if password_hash != null ~}
+chpasswd:
+  expire: false
+  users:
+    - name: ${username}
+      password: ${password_hash}
+      type: hash
+%{ endif ~}
+
+package_update: true
+packages:
+  - qemu-guest-agent
+  - python3
+
+runcmd:
+  - systemctl enable --now qemu-guest-agent

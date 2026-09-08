@@ -1,0 +1,9 @@
+---
+exclude_paths:
+  - ansible/.galaxy/
+  - .galaxy/
+
+# rke2_cilium değişkenleri cilium_* önekli: aynı isimler group_vars'ta da set edilip
+# HelmChartConfig template'ine oradan geçiyor.
+skip_list:
+  - var-naming[no-role-prefix]

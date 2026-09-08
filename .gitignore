@@ -1,0 +1,46 @@
+# --- Terraform ---
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+plan.out
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+crash.log
+crash.*.log
+
+# --- Secrets (token, password, key) ---
+*.tfvars
+*.tfvars.json
+*.pem
+*.key
+id_rsa
+id_ed25519
+kubeconfig
+*.kubeconfig
+ansible/inventory/*/group_vars/all/secrets.yml
+ansible/cilium-ca/
+
+# --- Terraform modül lock'ları: pre-commit terraform_validate üretir ---
+terraform/modules/*/.terraform.lock.hcl
+
+# --- Ansible ---
+ansible/.galaxy/
+ansible/.ansible/
+ansible/inventory/*/hosts.yml
+*.retry
+
+# --- Üretilen doküman artefaktları (archify visual-check) ---
+docs/
+
+# --- Yerel araçlar & OS ---
+.claude/settings.local.json
+.claude/.headroom_*
+.serena/
+.DS_Store

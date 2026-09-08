@@ -1,0 +1,28 @@
+---
+all:
+  vars:
+    ansible_user: ${username}
+    ansible_python_interpreter: /usr/bin/python3
+
+  hosts:
+    ${master_name}:
+      ansible_host: ${master_ip}
+%{ for name, ip in workers ~}
+    ${name}:
+      ansible_host: ${ip}
+%{ endfor ~}
+
+rke2-cluster:
+  children:
+    masters:
+    workers:
+
+masters:
+  hosts:
+    ${master_name}:
+
+workers:
+  hosts:
+%{ for name, ip in workers ~}
+    ${name}:
+%{ endfor ~}

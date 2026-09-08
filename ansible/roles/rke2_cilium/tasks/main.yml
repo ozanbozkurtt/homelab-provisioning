@@ -1,0 +1,34 @@
+---
+- name: Place Cilium manifests on the first server
+  when:
+    - inventory_hostname == groups[rke2_servers_group_name][0]
+    - "'cilium' in rke2_cni"
+  tags: [rke2, cilium]
+  block:
+    - name: Generate or load the shared Cilium CA
+      ansible.builtin.include_tasks: ca.yml
+
+    - name: Ensure RKE2 manifests directory exists
+      ansible.builtin.file:
+        path: "{{ rke2_cilium_manifest_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render Cilium HelmChartConfig
+      ansible.builtin.template:
+        src: rke2-cilium-config.yaml.j2
+        dest: "{{ rke2_cilium_manifest_dir }}/rke2-cilium-config.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Render Cilium LB-IPAM and L2 announcement policy
+      ansible.builtin.template:
+        src: cilium-lb-ipam.yaml.j2
+        dest: "{{ rke2_cilium_manifest_dir }}/cilium-lb-ipam.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+      when: cilium_lb_ipam_enabled | bool

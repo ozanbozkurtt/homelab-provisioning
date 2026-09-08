@@ -24,7 +24,7 @@ id_rsa
 id_ed25519
 kubeconfig
 *.kubeconfig
-ansible/inventory/*/group_vars/all/secrets.yml
+ansible/.secrets/
 ansible/cilium-ca/
 
 # --- Terraform modül lock'ları: pre-commit terraform_validate üretir ---

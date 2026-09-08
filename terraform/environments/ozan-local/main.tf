@@ -50,11 +50,6 @@ resource "terraform_data" "resource_budget" {
   }
 }
 
-resource "random_password" "rke2_token" {
-  length  = 48
-  special = false
-}
-
 resource "proxmox_virtual_environment_file" "cloud_init" {
   for_each = local.all_nodes
 
@@ -134,14 +129,5 @@ resource "local_file" "ansible_inventory" {
     master_name = local.master_name
     master_ip   = local.master_ip
     workers     = local.worker_ips
-  })
-}
-
-resource "local_sensitive_file" "ansible_secrets" {
-  filename        = "${path.module}/${var.ansible_root}/inventory/${var.environment}/group_vars/all/secrets.yml"
-  file_permission = "0600"
-
-  content = yamlencode({
-    rke2_token = random_password.rke2_token.result
   })
 }

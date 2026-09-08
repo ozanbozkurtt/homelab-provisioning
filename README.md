@@ -11,7 +11,7 @@ Proxmox VE üzerinde **1 master + 2 worker RKE2 cluster'ı**. Terraform altyapı
 | Altyapı | Terraform | VM'in var olması, boyutu, IP'si, diski, `destroy`. `plan` ile önizleme. |
 | Bootstrap | cloud-init | Sadece Ansible'ın SSH ile girebilmesi kadarı: kullanıcı, SSH key, `qemu-guest-agent`. |
 | Konfigürasyon | Ansible | RKE2 (+ opsiyonel Cilium) kurulum/join/upgrade. |
-| Bağlantı | Terraform → Ansible | Terraform inventory ve secret'ları üretir; tek doğruluk kaynağı topolojidir. |
+| Bağlantı | Terraform → Ansible | Terraform inventory'yi üretir; tek doğruluk kaynağı topolojidir. |
 | Cluster içi | GitOps | Ayrı repo — faz 2. Bu repo cluster'ın kendisini kurar, orada durur. |
 
 Konfigürasyon cloud-init'te değil Ansible'da olduğu için **gün-2 değişiklikleri VM'i yeniden yaratmadan** uygulanır.
@@ -114,7 +114,7 @@ terraform plan
 terraform apply
 ```
 
-Apply, `ansible/inventory/ozan-local/` altına `hosts.yml` ve `group_vars/all/secrets.yml` (rke2 token) dosyalarını yazar.
+Apply, `ansible/inventory/ozan-local/hosts.yml` dosyasını yazar — Ansible'ın inventory'si buradan geliyor.
 
 ### 2. Konfigürasyon
 
@@ -155,7 +155,7 @@ cd terraform/environments/ozan-local
 terraform destroy
 ```
 
-`destroy`, Terraform'un ürettiği `hosts.yml` ve `secrets.yml` dosyalarını da kaldırır.
+`destroy`, Terraform'un ürettiği `hosts.yml` dosyasını da kaldırır. Cluster token'ı Ansible'ın ürettiği bir dosya olduğu için yerinde kalır; yeni bir cluster istiyorsan `ansible/.secrets/ozan-local/rke2_token` dosyasını sil.
 
 ### Ölçek değiştirme
 
@@ -262,10 +262,11 @@ Cache node'da yoksa (pod down) Cilium trafiği normal servise gönderir — DNS 
 | Nerede | Ne var | Nasıl korunuyor |
 | --- | --- | --- |
 | `terraform.tfvars` | Proxmox API token (yazılırsa) | gitignored + `chmod 600`. **Tercih edilen: hiç yazma**, `export TF_VAR_proxmox_api_token=...` |
-| `terraform.tfstate` | `rke2_token`, API token — **düz metin** | gitignored + `chmod 600`. Terraform state'i şifrelemez |
+| `terraform.tfstate` | Proxmox API token — **düz metin** | gitignored + `chmod 600`. Terraform state'i şifrelemez |
 | Proxmox snippet datastore'u | cloud-init user-data | Password düz metin değil **SHA-512 hash** olarak yazılır (`vm_password_hash`) |
-| `group_vars/all/secrets.yml` | `rke2_token` | Terraform `0600` ile yazar, gitignored |
+| `ansible/.secrets/<env>/rke2_token` | RKE2 cluster join token'ı | Ansible `password` lookup üretir; dizin `0700`, dosya `0600`, gitignored |
 
+- **Cluster token'ı bilinçli olarak Ansible'da:** join token'ı bir cluster secret'ı, VM'lerin varlığıyla ilgisi yok. Terraform'da üretilse `terraform.tfstate` içinde düz metin dururdu ve state'i kaybetmek token'ı kaybetmek olurdu. `password` lookup dosya yoksa üretiyor, varsa okuyor; rotate etmek dosyayı silip `rke2-reset.yml` + `site.yml` koşturmak demek, Terraform'a hiç dokunmuyor.
 - `vm_password_hash` verilmezse hesap kilitlenir; giriş yalnızca SSH key ile olur. Konsoldan da girmek istiyorsan: `mkpasswd -m sha-512`.
 - Terraform state'i her yazışında dosya iznini umask'tan alır. `0600` kalsın istiyorsan komutları `umask 077` ile çalıştır, yoksa apply sonrası tekrar `chmod 600 terraform.tfstate*`.
 - **Uzak backend yok, bilinçli:** bu katman cluster'ı kuran katman, cluster'ın içindeki bir store'a (MinIO vb.) state yazamaz — tavuk-yumurta. Cluster dışı bir S3 uyumlu store çıkarsa `providers.tf` içine bir `backend "s3"` bloğu ekle. O zamana kadar state dosyasını yedekle: kaybı = elle temizlenecek 3 orphan VM.
@@ -300,11 +301,11 @@ Cache node'da yoksa (pod down) Cilium trafiği normal servise gönderir — DNS 
     │   ├── requirements.yml          # lablabs.rke2
     │   ├── rke2_cilium/              # Cilium HelmChartConfig + LB-IPAM + Gateway API CRD + verify
     │   └── node_local_dns/           # node-local DNS cache + CiliumLocalRedirectPolicy
+    ├── .secrets/ozan-local/          # rke2_token, Ansible üretir, gitignored
     ├── inventory/ozan-local/
     │   ├── hosts.yml                 # Terraform üretir, gitignored
     │   └── group_vars/
     │       ├── all/main.yml          # cluster_cni
-    │       ├── all/secrets.yml       # Terraform üretir (rke2_token), gitignored
     │       └── rke2-cluster.yml
     └── playbooks/
         ├── site.yml

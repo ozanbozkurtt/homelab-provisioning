@@ -32,6 +32,9 @@ rke2_service_cidr: ["10.43.0.0/16"]
 
 rke2_node_name: "{{ inventory_hostname }}"
 
+rke2_token_file: "{{ inventory_dir | dirname | dirname }}/.secrets/{{ env_name }}/rke2_token"
+rke2_token: "{{ lookup('ansible.builtin.password', rke2_token_file ~ ' length=48 chars=ascii_letters,digits') }}"
+
 cilium_cluster_name: "{{ env_name }}"
 cilium_cluster_id: 1
 cilium_native_routing_cidr: "10.42.0.0/15"

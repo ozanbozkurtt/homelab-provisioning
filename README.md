@@ -49,6 +49,7 @@ Adımların gerekçesi ve seçenekleri [Kullanım](#kullanım) bölümünde.
 | Node kaynakları | 8 vCPU · ~15.5 GB RAM · 338 GB boş |
 | Template | VM `100` (Ubuntu cloud-init, `base-100-disk-0`) |
 | RKE2 | `v1.31.7+rke2r1` (`rke2_channel: stable`) |
+| Cilium | `v1.17.1` (RKE2'nin paketlediği chart) · Gateway API CRD `v1.2.1` |
 | Storage | `local` → ISO + cloud-init snippet'leri · `ssd` → VM diskleri |
 
 ## Oluşturulan Altyapı
@@ -205,11 +206,11 @@ kubectl -n kube-system get pods -l k8s-app=cilium
 
 > **Dikkat:** `cilium_lb_ipam_range` varsayılanı `192.168.1.240-192.168.1.250`. Router'ının DHCP havuzuyla çakışmadığını doğrula, yoksa IP çakışması yaşarsın.
 
-> **RAM:** Cilium agent + envoy + Hubble relay + clustermesh-apiserver, canal'a göre kayda değer ek yük getirir. 4 GB'lık worker'larda iş yükleriyle birlikte sıkışırsa önce `cilium_clustermesh_replicas: 0`.
+> **RAM:** Cilium agent + envoy + Hubble relay, canal'a göre kayda değer ek yük getirir. 4 GB'lık worker'larda iş yükleriyle birlikte sıkışırsa ilk kısılacak yer Hubble: `cilium_hubble_relay: false`. Clustermesh açılırsa apiserver + etcd + kvstoremesh üç container daha ekler.
 
 ### Clustermesh ve paylaşılan CA
 
-Mesh'teki tüm cluster'lar **aynı CA'yı** kullanmak zorunda, yoksa apiserver'lar arası mTLS kurulmaz. CA, Ansible controller'ında bir kez üretilip `ansible/cilium-ca/ozan-local/` altında saklanır ve `tls.ca` ile Cilium'a verilir. `ca.key` private key'dir, `.gitignore` ile dışlanmıştır — **CA'yı repoya commit etme**.
+CA, `cluster_cni: cilium` iken clustermesh kapalı olsa da üretilir — Hubble'ın mTLS'i de bu CA'ya dayanıyor. Clustermesh açıldığında ise mesh'teki tüm cluster'lar **aynı CA'yı** kullanmak zorunda, yoksa apiserver'lar arası mTLS kurulmaz. CA, Ansible controller'ında bir kez üretilip `ansible/cilium-ca/ozan-local/` altında saklanır ve `tls.ca` ile Cilium'a verilir. `ca.key` private key'dir, `.gitignore` ile dışlanmıştır — **CA'yı repoya commit etme**.
 
 > CA inventory dizininin dışında tutulur: Ansible, inventory dizinindeki her dosyayı inventory kaynağı sanıp parse etmeye çalışır ve PEM dosyalarında hata verir.
 
@@ -284,7 +285,7 @@ Cache node'da yoksa (pod down) Cilium trafiği normal servise gönderir — DNS 
 │   ├── environments/ozan-local/      # terraform apply bu dizinde çalışır
 │   │   ├── main.tf                   # VM'ler, cloud-init snippet'leri, inventory/secret üretimi
 │   │   ├── variables.tf              # Auth, ağ, boyutlar, kaynak bütçesi
-│   │   ├── providers.tf              # bpg/proxmox + random + local
+│   │   ├── providers.tf              # bpg/proxmox + local
 │   │   ├── outputs.tf                # IP'ler, sonraki adım komutu
 │   │   ├── terraform.tfvars          # gitignored
 │   │   ├── terraform.tfvars.example
